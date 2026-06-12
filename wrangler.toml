@@ -1,0 +1,13 @@
+name = "qing-music-player"
+type = "javascript-next"
+
+[build]
+command = ""
+
+[deploy]
+bucket = "./public"
+
+[minify]
+javascript = true
+css = true
+html = true

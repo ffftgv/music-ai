@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>青听音乐 - 多源音乐播放器</title>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#667eea">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="logo">
+                <h1>🎵 青听音乐</h1>
+                <span class="subtitle">多源音乐播放器</span>
+            </div>
+            
+            <div class="search-container">
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="搜索歌曲、歌手、专辑..." autocomplete="off">
+                    <button id="searchBtn" class="btn-search">搜索</button>
+                </div>
+                
+                <div class="source-selector">
+                    <label>音源：</label>
+                    <select id="sourceSelect">
+                        <option value="wy">网易云音乐</option>
+                        <option value="qq">QQ音乐</option>
+                        <option value="kg">酷狗音乐</option>
+                        <option value="kw">酷我音乐</option>
+                    </select>
+                </div>
+            </div>
+        </header>
+
+        <main class="app-main">
+            <section class="results-section">
+                <div class="section-header">
+                    <h2>搜索结果</h2>
+                    <span id="resultCount" class="result-count"></span>
+                </div>
+                <div id="resultsList" class="results-list">
+                    <div class="empty-state">
+                        <div class="empty-icon">🔍</div>
+                        <p>输入关键词搜索音乐</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="player-section">
+                <div class="now-playing">
+                    <div class="album-art">
+                        <img id="albumArt" src="/default-album.png" alt="专辑封面">
+                    </div>
+                    
+                    <div class="track-info">
+                        <h3 id="trackName" class="track-name">未播放</h3>
+                        <p id="trackArtist" class="track-artist">选择一首歌曲开始播放</p>
+                    </div>
+                    
+                    <div class="player-controls">
+                        <div class="control-buttons">
+                            <button id="prevBtn" class="btn-control" title="上一首">⏮</button>
+                            <button id="playBtn" class="btn-control btn-play" title="播放/暂停">▶</button>
+                            <button id="nextBtn" class="btn-control" title="下一首">⏭</button>
+                        </div>
+                        
+                        <div class="quality-selector">
+                            <label>音质：</label>
+                            <select id="qualitySelect">
+                                <option value="128">标准 (128kbps)</option>
+                                <option value="320" selected>高清 (320kbps)</option>
+                                <option value="flac">无损 (FLAC)</option>
+                                <option value="hires">Hi-Res</option>
+                            </select>
+                        </div>
+                        
+                        <button id="downloadBtn" class="btn-download">下载</button>
+                    </div>
+                    
+                    <div class="progress-container">
+                        <span id="currentTime" class="time">00:00</span>
+                        <div class="progress-bar">
+                            <input type="range" id="progressBar" min="0" max="100" value="0">
+                        </div>
+                        <span id="duration" class="time">00:00</span>
+                    </div>
+                </div>
+                
+                <div class="playlist-section">
+                    <h3>播放列表 <span id="playlistCount">(0)</span></h3>
+                    <div id="playlist" class="playlist">
+                        <div class="empty-playlist">播放列表为空</div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <div id="loading" class="loading-overlay" style="display: none;">
+            <div class="spinner"></div>
+            <p>加载中...</p>
+        </div>
+
+        <audio id="audioPlayer" preload="auto"></audio>
+    </div>
+
+    <script src="/app.js"></script>
+</body>
+</html>
