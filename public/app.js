@@ -268,9 +268,76 @@ class MusicPlayer {
     
     async downloadCurrentTrack() {
         if (!this.currentTrack) {
-            alert('请先选择歌曲');
+            this.showNotification('请先选择歌曲', 'error');
             return;
         }
+        
+        const source = this.elements.sourceSelect.value;
+        const quality = this.elements.qualitySelect.value;
+        
+        this.showNotification('准备下载...', 'info');
+        
+        try {
+            let downloadUrl = null;
+            
+            // 获取下载链接
+            if (this.currentTrack.playUrl) {
+                downloadUrl = this.currentTrack.playUrl;
+            } else {
+                const response = await fetch(`/api/play?id=${this.currentTrack.id}&source=${source}&quality=${quality}`);
+                const data = await response.json();
+                downloadUrl = data.url;
+            }
+            
+            if (!downloadUrl) {
+                throw new Error('无法获取下载链接');
+            }
+            
+            // 使用 fetch 获取 blob 然后下载（最可靠）
+            this.showNotification('正在下载...', 'info');
+            
+            const audioResponse = await fetch(downloadUrl);
+            
+            if (!audioResponse.ok) {
+                throw new Error('下载失败：无法获取音频文件');
+            }
+            
+            const blob = await audioResponse.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            
+            // 创建下载链接
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = `${this.currentTrack.name} - ${this.currentTrack.artist}.${this.getFileExtension(downloadUrl)}`;
+            link.style.display = 'none';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // 释放 blob URL
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+            
+            this.showNotification('下载完成！', 'success');
+            
+        } catch (error) {
+            console.error('下载失败:', error);
+            this.showNotification('下载失败: ' + error.message, 'error');
+            
+            // 备用方案：直接打开链接
+            if (confirm('下载失败，是否在新窗口打开音频？')) {
+                window.open(downloadUrl, '_blank');
+            }
+        }
+    }
+    
+    // 获取文件扩展名
+    getFileExtension(url) {
+        if (url.includes('.flac')) return 'flac';
+        if (url.includes('.wav')) return 'wav';
+        if (url.includes('.ape')) return 'ape';
+        return 'mp3'; // 默认
+    }
         
         const source = this.elements.sourceSelect.value;
         const quality = this.elements.qualitySelect.value;
