@@ -1,5 +1,5 @@
 /**
- * 获取播放链接 API - 修复版
+ * 获取播放链接 API - 最终修复版
  */
 export async function onRequestGet(context) {
   const { request } = context;
@@ -19,7 +19,7 @@ export async function onRequestGet(context) {
   try {
     let result = null;
     
-    console.log('播放请求:', { id, source, quality });
+    console.log('播放请求:', id, source, quality);
     
     switch (source) {
       case 'kw':
@@ -65,9 +65,8 @@ export async function onRequestGet(context) {
   }
 }
 
-// 酷我音乐获取播放链接
+// 酷我音乐获取播放链接 - 正确版本
 async function getKuwoPlayUrl(rid, quality) {
-  // 音质映射
   const brMap = {
     '128': '128k',
     '320': '320k',
@@ -77,7 +76,7 @@ async function getKuwoPlayUrl(rid, quality) {
   
   const br = brMap[quality] || '320k';
   
-  // 正确的 API URL（使用 & 而不是转义字符）
+  // 关键：直接使用 & 符号，不要转义！
   const apiUrl = 'https://antiserver.kuwo.cn/anti.s?format=mp3&response=url&type=convert_url&rid=' + rid + '&br=' + br;
   
   console.log('酷我API请求:', apiUrl);
@@ -98,7 +97,7 @@ async function getKuwoPlayUrl(rid, quality) {
     
     console.log('酷我返回URL:', playUrl);
     
-    // 检查返回的URL是否有效
+    // 检查是否是有效的URL
     if (playUrl && playUrl.trim().startsWith('http')) {
       return {
         url: playUrl.trim(),
@@ -109,7 +108,7 @@ async function getKuwoPlayUrl(rid, quality) {
       };
     }
     
-    throw new Error('未获取到有效的播放链接');
+    throw new Error('未获取到有效的播放链接：' + playUrl);
     
   } catch (error) {
     console.error('酷我音乐播放链接获取失败:', error);
