@@ -1,8 +1,6 @@
 /**
- * 搜索音乐 API - Cloudflare Workers Function
- * 路径: /api/search
+ * 搜索音乐 API - 优化版
  */
-
 export async function onRequestGet(context) {
   const { request } = context;
   const url = new URL(request.url);
@@ -59,116 +57,137 @@ export async function onRequestGet(context) {
   }
 }
 
-// 网易云音乐搜索
+// 网易云音乐搜索 - 优化版，添加默认封面
 async function searchNetease(keyword, page, limit) {
   const offset = (page - 1) * limit;
   const apiUrl = `https://music.163.com/api/search/get?s=${encodeURIComponent(keyword)}&type=1&limit=${limit}&offset=${offset}`;
   
-  const response = await fetch(apiUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      'Referer': 'https://music.163.com/'
+  try {
+    const response = await fetch(apiUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': 'https://music.163.com/'
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.code === 200 && data.result && data.result.songs) {
+      return data.result.songs.map(song => ({
+        id: song.id,
+        name: song.name,
+        artist: song.artists.map(a => a.name).join(', '),
+        album: song.album.name,
+        duration: song.duration,
+        // 确保 picUrl 有效，否则使用默认封面
+        picUrl: song.album.picUrl || 'https://picsum.photos/300/300?random=' + song.id,
+        source: 'wy'
+      }));
     }
-  });
-  
-  const data = await response.json();
-  
-  if (data.code === 200 && data.result && data.result.songs) {
-    return data.result.songs.map(song => ({
-      id: song.id,
-      name: song.name,
-      artist: song.artists.map(a => a.name).join(', '),
-      album: song.album.name,
-      duration: song.duration,
-      picUrl: song.album.picUrl,
-      source: 'wy'
-    }));
+    
+    return [];
+  } catch (error) {
+    console.error('网易云搜索失败:', error);
+    return [];
   }
-  
-  return [];
 }
 
 // QQ音乐搜索
 async function searchQQ(keyword, page, limit) {
   const apiUrl = `https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg?_datacache=1&key=${encodeURIComponent(keyword)}&page=${page}`;
   
-  const response = await fetch(apiUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      'Referer': 'https://y.qq.com/'
+  try {
+    const response = await fetch(apiUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': 'https://y.qq.com/'
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.data && data.data.song && data.data.song.itemlist) {
+      return data.data.song.itemlist.map((song, idx) => ({
+        id: song.id,
+        mid: song.mid,
+        name: song.name,
+        artist: song.singer,
+        album: song.album,
+        duration: 0,
+        picUrl: song.mid ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${song.mid}.jpg` : 'https://picsum.photos/300/300?random=' + idx,
+        source: 'qq'
+      }));
     }
-  });
-  
-  const data = await response.json();
-  
-  if (data.data && data.data.song && data.data.song.itemlist) {
-    return data.data.song.itemlist.map((song, idx) => ({
-      id: song.id,
-      mid: song.mid,
-      name: song.name,
-      artist: song.singer,
-      album: song.album,
-      duration: 0,
-      picUrl: `https://y.gtimg.cn/music/photo_new/T002R300x300M000${song.mid}.jpg`,
-      source: 'qq'
-    }));
+    
+    return [];
+  } catch (error) {
+    console.error('QQ音乐搜索失败:', error);
+    return [];
   }
-  
-  return [];
 }
 
 // 酷狗音乐搜索
 async function searchKugou(keyword, page, limit) {
   const apiUrl = `https://msearch.kugou.com/api/v3/search/song?keyword=${encodeURIComponent(keyword)}&page=${page}&pagesize=${limit}`;
   
-  const response = await fetch(apiUrl, {
-    headers: {
-      'User-Agent': 'Kugou/Android 12.3.1',
-      'Referer': 'https://www.kugou.com/'
+  try {
+    const response = await fetch(apiUrl, {
+      headers: {
+        'User-Agent': 'Kugou/Android 12.3.1',
+        'Referer': 'https://www.kugou.com/'
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.data && data.data.info) {
+      return data.data.info.map(song => ({
+        id: song.hash,
+        name: song.songname,
+        artist: song.singername,
+        album: song.album_name,
+        duration: song.duration * 1000,
+        picUrl: song.img || 'https://picsum.photos/300/300?random=' + Math.random(),
+        source: 'kg'
+      }));
     }
-  });
-  
-  const data = await response.json();
-  
-  if (data.data && data.data.info) {
-    return data.data.info.map(song => ({
-      id: song.hash,
-      name: song.songname,
-      artist: song.singername,
-      album: song.album_name,
-      duration: song.duration * 1000,
-      picUrl: song.img,
-      source: 'kg'
-    }));
+    
+    return [];
+  } catch (error) {
+    console.error('酷狗搜索失败:', error);
+    return [];
   }
-  
-  return [];
 }
 
 // 酷我音乐搜索
 async function searchKuwo(keyword, page, limit) {
   const apiUrl = `https://search.kuwo.cn/r.s?all=${encodeURIComponent(keyword)}&pn=${page}&rn=${limit}&fmt=json`;
   
-  const response = await fetch(apiUrl, {
-    headers: {
-      'User-Agent': 'KWMobile/6.0',
-      'Referer': 'https://www.kuwo.cn/'
+  try {
+    const response = await fetch(apiUrl, {
+      headers: {
+        'User-Agent': 'KWMobile/6.0',
+        'Referer': 'https://www.kuwo.cn/'
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.abslist) {
+      return data.abslist.map(song => ({
+        id: song.MUSICRID.replace('MUSIC_', ''),
+        name: song.SONGNAME,
+        artist: song.ARTIST,
+        album: song.ALBUM,
+        duration: song.DURATION * 1000,
+        picUrl: song.ARTIST_PIC || 'https://picsum.photos/300/300?random=' + Math.random(),
+        source: 'kw'
+      }));
     }
-  });
-  
-  const data = await response.json();
-  
-  if (data.abslist) {
-    return data.abslist.map(song => ({
-      id: song.MUSICRID.replace('MUSIC_', ''),
-      name: song.SONGNAME,
-      artist: song.ARTIST,
-      album: song.ALBUM,
-      duration: song.DURATION * 1000,
-      picUrl: song.ARTIST_PIC,
-      source: 'kw'
-    }));
+    
+    return [];
+  } catch (error) {
+    console.error('酷我搜索失败:', error);
+    return [];
   }
-  
-  return [];
 }
