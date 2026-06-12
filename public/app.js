@@ -5,6 +5,7 @@ class MusicPlayer {
         this.playlist = [];
         this.currentIndex = -1;
         this.isPlaying = false;
+        this.searchResults = [];
         
         this.initializeElements();
         this.bindEvents();
@@ -53,6 +54,11 @@ class MusicPlayer {
         this.audio.addEventListener('timeupdate', () => this.updateProgress());
         this.audio.addEventListener('loadedmetadata', () => this.updateDuration());
         this.audio.addEventListener('ended', () => this.nextTrack());
+        this.audio.addEventListener('error', (e) => {
+            console.error('音频加载失败:', e);
+            this.showNotification('播放失败，尝试下一首', 'error');
+            setTimeout(() => this.nextTrack(), 2000);
+        });
     }
     
     async search() {
@@ -69,11 +75,21 @@ class MusicPlayer {
         try {
             const response = await fetch(`/api/search?keyword=${encodeURIComponent(keyword)}&source=${source}`);
             const results = await response.json();
-            this.displayResults(results);
+            
+            console.log('搜索结果:', results);
+            
+            if (Array.isArray(results) && results.length > 0) {
+                this.searchResults = results;
+                this.displayResults(results);
+            } else {
+                this.displayResults([]);
+                this.showNotification('未找到相关歌曲', 'info');
+            }
+            
             this.showLoading(false);
         } catch (error) {
             console.error('搜索失败:', error);
-            alert('搜索失败: ' + error.message);
+            this.showNotification('搜索失败: ' + error.message, 'error');
             this.showLoading(false);
         }
     }
@@ -125,24 +141,67 @@ class MusicPlayer {
         this.showLoading(true);
         
         try {
-            const response = await fetch(`/api/play?id=${this.currentTrack.id}&source=${source}&quality=${quality}`);
-            const data = await response.json();
+            let playUrl = null;
             
-            if (data.url) {
-                this.audio.src = data.url;
-                await this.audio.play();
-                this.isPlaying = true;
-                this.updatePlayButton();
+            // 如果搜索结果中已经有播放链接，直接使用
+            if (this.currentTrack.playUrl) {
+                playUrl = this.currentTrack.playUrl;
+            } else {
+                // 否则通过 API 获取
+                const response = await fetch(`/api/play?id=${this.currentTrack.id}&source=${source}&quality=${quality}`);
+                const data = await response.json();
+                
+                if (data.url) {
+                    playUrl = data.url;
+                }
+            }
+            
+            if (playUrl) {
+                console.log('播放链接:', playUrl);
+                
+                await this.loadAndPlay(playUrl);
+                this.savePlaylist();
             } else {
                 throw new Error('无法获取播放链接');
             }
             
             this.showLoading(false);
+            
         } catch (error) {
             console.error('播放失败:', error);
-            alert('播放失败: ' + error.message);
+            this.showNotification('播放失败: ' + error.message, 'error');
             this.showLoading(false);
+            
+            setTimeout(() => this.nextTrack(), 2000);
         }
+    }
+    
+    async loadAndPlay(url) {
+        return new Promise((resolve, reject) => {
+            this.audio.src = url;
+            
+            const onCanPlay = () => {
+                this.audio.removeEventListener('canplay', onCanPlay);
+                this.audio.removeEventListener('error', onError);
+                
+                this.audio.play().then(() => {
+                    resolve();
+                }).catch(err => {
+                    reject(err);
+                });
+            };
+            
+            const onError = (e) => {
+                this.audio.removeEventListener('canplay', onCanPlay);
+                this.audio.removeEventListener('error', onError);
+                reject(new Error('音频加载失败'));
+            };
+            
+            this.audio.addEventListener('canplay', onCanPlay);
+            this.audio.addEventListener('error', onError);
+            
+            this.audio.load();
+        });
     }
     
     togglePlay() {
@@ -151,7 +210,12 @@ class MusicPlayer {
         if (this.isPlaying) {
             this.audio.pause();
         } else {
-            this.audio.play();
+            if (this.audio.src) {
+                this.audio.play().catch(err => {
+                    console.error('播放失败:', err);
+                    this.showNotification('播放失败，请点击页面任意位置后重试', 'error');
+                });
+            }
         }
     }
     
@@ -171,10 +235,12 @@ class MusicPlayer {
         if (!this.currentTrack) return;
         
         this.elements.trackName.textContent = this.currentTrack.name;
-        this.elements.trackArtist.textContent = this.currentTrack.artist;
+        this.elements.trackArtist.textContent = `${this.currentTrack.artist} - ${this.currentTrack.album || '未知专辑'}`;
         
         if (this.currentTrack.picUrl) {
             this.elements.albumArt.src = this.currentTrack.picUrl;
+        } else {
+            this.elements.albumArt.src = '/default-album.png';
         }
     }
     
@@ -210,12 +276,19 @@ class MusicPlayer {
         const quality = this.elements.qualitySelect.value;
         
         try {
-            const response = await fetch(`/api/play?id=${this.currentTrack.id}&source=${source}&quality=${quality}`);
-            const data = await response.json();
+            let downloadUrl = null;
             
-            if (data.url) {
+            if (this.currentTrack.playUrl) {
+                downloadUrl = this.currentTrack.playUrl;
+            } else {
+                const response = await fetch(`/api/play?id=${this.currentTrack.id}&source=${source}&quality=${quality}`);
+                const data = await response.json();
+                downloadUrl = data.url;
+            }
+            
+            if (downloadUrl) {
                 const link = document.createElement('a');
-                link.href = data.url;
+                link.href = downloadUrl;
                 link.download = `${this.currentTrack.name} - ${this.currentTrack.artist}.mp3`;
                 link.click();
             }
@@ -238,6 +311,10 @@ class MusicPlayer {
         this.playlist.forEach((track, index) => {
             const item = document.createElement('div');
             item.className = 'playlist-item';
+            if (index === this.currentIndex) {
+                item.classList.add('active');
+            }
+            
             item.innerHTML = `
                 <div class="playlist-item-info">
                     <div class="playlist-item-name">${this.escapeHtml(track.name)}</div>
@@ -278,6 +355,21 @@ class MusicPlayer {
         this.elements.loading.style.display = show ? 'flex' : 'none';
     }
     
+    showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        notification.textContent = message;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.style.animation = 'slideIn 0.3s ease-out reverse';
+            setTimeout(() => {
+                document.body.removeChild(notification);
+            }, 300);
+        }, 3000);
+    }
+    
     formatTime(seconds) {
         if (!seconds || isNaN(seconds)) return '00:00';
         const mins = Math.floor(seconds / 60);
@@ -294,5 +386,5 @@ class MusicPlayer {
 
 document.addEventListener('DOMContentLoaded', () => {
     window.player = new MusicPlayer();
-    console.log('🎵 青听音乐播放器已启动');
+    console.log('🎵 青听音乐播放器已启动 - 使用 QingMusic 代理');
 });

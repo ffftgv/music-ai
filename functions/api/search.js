@@ -1,12 +1,12 @@
 /**
- * 搜索音乐 API - 优化版
+ * 搜索音乐 API - 使用 QingMusic 代理
  */
 export async function onRequestGet(context) {
   const { request } = context;
   const url = new URL(request.url);
   
   const keyword = url.searchParams.get('keyword');
-  const source = url.searchParams.get('source') || 'wy';
+  const source = url.searchParams.get('source') || 'kw';
   const page = url.searchParams.get('page') || 1;
   const limit = url.searchParams.get('limit') || 20;
   
@@ -18,34 +18,44 @@ export async function onRequestGet(context) {
   }
   
   try {
-    let results = [];
+    // 使用 QingMusic 的代理服务器
+    const apiUrl = `https://music.haitangw.cc/music/gedan/${source}.php?name=${encodeURIComponent(keyword)}&page=${page}`;
     
-    switch (source) {
-      case 'wy':
-        results = await searchNetease(keyword, page, limit);
-        break;
-      case 'qq':
-        results = await searchQQ(keyword, page, limit);
-        break;
-      case 'kg':
-        results = await searchKugou(keyword, page, limit);
-        break;
-      case 'kw':
-        results = await searchKuwo(keyword, page, limit);
-        break;
-      default:
-        return new Response(JSON.stringify({ error: '不支持的音源' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
+    console.log('搜索请求:', apiUrl);
+    
+    const response = await fetch(apiUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': 'https://music.haitangw.cc/'
+      }
+    });
+    
+    const data = await response.json();
+    console.log('搜索响应:', JSON.stringify(data).substring(0, 200));
+    
+    if (data.code === 200 && data.data && data.data.musicList) {
+      const results = data.data.musicList.slice(0, limit).map((song, index) => ({
+        id: song.rid || `song_${index}`,
+        name: song.name || '未知歌曲',
+        artist: song.artist || song.singername || '未知歌手',
+        album: song.album || song.albumname || '未知专辑',
+        duration: (song.duration || 180) * 1000,
+        picUrl: song.pic || song.img || `https://picsum.photos/300/300?random=${index}`,
+        source: source,
+        playUrl: song.url ? `https://music.haitangw.cc/music/gedan/${source}.php?${song.url}` : null
+      }));
+      
+      return new Response(JSON.stringify(results), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'max-age=300'
+        }
+      });
     }
     
-    return new Response(JSON.stringify(results), {
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Cache-Control': 'max-age=300'
-      }
+    return new Response(JSON.stringify([]), {
+      headers: { 'Content-Type': 'application/json' }
     });
     
   } catch (error) {
@@ -54,140 +64,5 @@ export async function onRequestGet(context) {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     });
-  }
-}
-
-// 网易云音乐搜索 - 优化版，添加默认封面
-async function searchNetease(keyword, page, limit) {
-  const offset = (page - 1) * limit;
-  const apiUrl = `https://music.163.com/api/search/get?s=${encodeURIComponent(keyword)}&type=1&limit=${limit}&offset=${offset}`;
-  
-  try {
-    const response = await fetch(apiUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://music.163.com/'
-      }
-    });
-    
-    const data = await response.json();
-    
-    if (data.code === 200 && data.result && data.result.songs) {
-      return data.result.songs.map(song => ({
-        id: song.id,
-        name: song.name,
-        artist: song.artists.map(a => a.name).join(', '),
-        album: song.album.name,
-        duration: song.duration,
-        // 确保 picUrl 有效，否则使用默认封面
-        picUrl: song.album.picUrl || 'https://picsum.photos/300/300?random=' + song.id,
-        source: 'wy'
-      }));
-    }
-    
-    return [];
-  } catch (error) {
-    console.error('网易云搜索失败:', error);
-    return [];
-  }
-}
-
-// QQ音乐搜索
-async function searchQQ(keyword, page, limit) {
-  const apiUrl = `https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg?_datacache=1&key=${encodeURIComponent(keyword)}&page=${page}`;
-  
-  try {
-    const response = await fetch(apiUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://y.qq.com/'
-      }
-    });
-    
-    const data = await response.json();
-    
-    if (data.data && data.data.song && data.data.song.itemlist) {
-      return data.data.song.itemlist.map((song, idx) => ({
-        id: song.id,
-        mid: song.mid,
-        name: song.name,
-        artist: song.singer,
-        album: song.album,
-        duration: 0,
-        picUrl: song.mid ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${song.mid}.jpg` : 'https://picsum.photos/300/300?random=' + idx,
-        source: 'qq'
-      }));
-    }
-    
-    return [];
-  } catch (error) {
-    console.error('QQ音乐搜索失败:', error);
-    return [];
-  }
-}
-
-// 酷狗音乐搜索
-async function searchKugou(keyword, page, limit) {
-  const apiUrl = `https://msearch.kugou.com/api/v3/search/song?keyword=${encodeURIComponent(keyword)}&page=${page}&pagesize=${limit}`;
-  
-  try {
-    const response = await fetch(apiUrl, {
-      headers: {
-        'User-Agent': 'Kugou/Android 12.3.1',
-        'Referer': 'https://www.kugou.com/'
-      }
-    });
-    
-    const data = await response.json();
-    
-    if (data.data && data.data.info) {
-      return data.data.info.map(song => ({
-        id: song.hash,
-        name: song.songname,
-        artist: song.singername,
-        album: song.album_name,
-        duration: song.duration * 1000,
-        picUrl: song.img || 'https://picsum.photos/300/300?random=' + Math.random(),
-        source: 'kg'
-      }));
-    }
-    
-    return [];
-  } catch (error) {
-    console.error('酷狗搜索失败:', error);
-    return [];
-  }
-}
-
-// 酷我音乐搜索
-async function searchKuwo(keyword, page, limit) {
-  const apiUrl = `https://search.kuwo.cn/r.s?all=${encodeURIComponent(keyword)}&pn=${page}&rn=${limit}&fmt=json`;
-  
-  try {
-    const response = await fetch(apiUrl, {
-      headers: {
-        'User-Agent': 'KWMobile/6.0',
-        'Referer': 'https://www.kuwo.cn/'
-      }
-    });
-    
-    const data = await response.json();
-    
-    if (data.abslist) {
-      return data.abslist.map(song => ({
-        id: song.MUSICRID.replace('MUSIC_', ''),
-        name: song.SONGNAME,
-        artist: song.ARTIST,
-        album: song.ALBUM,
-        duration: song.DURATION * 1000,
-        picUrl: song.ARTIST_PIC || 'https://picsum.photos/300/300?random=' + Math.random(),
-        source: 'kw'
-      }));
-    }
-    
-    return [];
-  } catch (error) {
-    console.error('酷我搜索失败:', error);
-    return [];
   }
 }
