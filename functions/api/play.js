@@ -1,5 +1,5 @@
 /**
- * 获取播放链接 API - 使用音乐平台公开 API
+ * 获取播放链接 API - 修复版
  */
 export async function onRequestGet(context) {
   const { request } = context;
@@ -18,6 +18,8 @@ export async function onRequestGet(context) {
   
   try {
     let result = null;
+    
+    console.log('播放请求:', { id, source, quality });
     
     switch (source) {
       case 'kw':
@@ -40,6 +42,8 @@ export async function onRequestGet(context) {
       throw new Error('无法获取播放链接');
     }
     
+    console.log('返回播放链接:', result.url);
+    
     return new Response(JSON.stringify(result), {
       headers: {
         'Content-Type': 'application/json',
@@ -50,25 +54,18 @@ export async function onRequestGet(context) {
     
   } catch (error) {
     console.error('获取播放链接失败:', error);
-    
-    // 失败时返回测试音频
-    return new Response(JSON.stringify({
-      url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-      br: 320000,
-      size: 0,
-      type: 'mp3',
-      source: source,
-      note: '测试音频（获取失败：' + error.message + '）'
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      id: id,
+      source: source
     }), {
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      }
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
     });
   }
 }
 
-// 酷我音乐获取播放链接 - 使用公开 API
+// 酷我音乐获取播放链接
 async function getKuwoPlayUrl(rid, quality) {
   // 音质映射
   const brMap = {
@@ -80,10 +77,10 @@ async function getKuwoPlayUrl(rid, quality) {
   
   const br = brMap[quality] || '320k';
   
-  // 使用酷我音乐的公开 API
-  const apiUrl = `https://antiserver.kuwo.cn/anti.s?format=mp3&response=url&type=convert_url&rid=${rid}&br=${br}`;
+  // 正确的 API URL（使用 & 而不是转义字符）
+  const apiUrl = 'https://antiserver.kuwo.cn/anti.s?format=mp3&response=url&type=convert_url&rid=' + rid + '&br=' + br;
   
-  console.log('酷我播放链接API:', apiUrl);
+  console.log('酷我API请求:', apiUrl);
   
   try {
     const response = await fetch(apiUrl, {
@@ -94,15 +91,15 @@ async function getKuwoPlayUrl(rid, quality) {
     });
     
     if (!response.ok) {
-      throw new Error(`API返回${response.status}`);
+      throw new Error('API返回' + response.status);
     }
     
     const playUrl = await response.text();
     
-    console.log('酷我播放链接:', playUrl);
+    console.log('酷我返回URL:', playUrl);
     
-    // 返回的应该是直接的 MP3 URL
-    if (playUrl && playUrl.startsWith('http')) {
+    // 检查返回的URL是否有效
+    if (playUrl && playUrl.trim().startsWith('http')) {
       return {
         url: playUrl.trim(),
         br: br,
@@ -122,7 +119,7 @@ async function getKuwoPlayUrl(rid, quality) {
 
 // 酷狗音乐获取播放链接
 async function getKugouPlayUrl(hash, quality) {
-  const apiUrl = `https://m.kugou.com/app/i/getSongInfo.php?cmd=playInfo&hash=${hash}`;
+  const apiUrl = 'https://m.kugou.com/app/i/getSongInfo.php?cmd=playInfo&hash=' + hash;
   
   try {
     const response = await fetch(apiUrl, {
@@ -133,7 +130,7 @@ async function getKugouPlayUrl(hash, quality) {
     });
     
     if (!response.ok) {
-      throw new Error(`API返回${response.status}`);
+      throw new Error('API返回' + response.status);
     }
     
     const data = await response.json();
@@ -156,24 +153,12 @@ async function getKugouPlayUrl(hash, quality) {
   }
 }
 
-// QQ音乐获取播放链接
+// QQ音乐获取播放链接（暂未实现）
 async function getQQPlayUrl(mid, quality) {
-  // QQ音乐的API比较复杂，需要vkey等参数
-  // 这里使用一个简化版，直接返回测试音频
-  // 实际应用中需要调用QQ音乐的API
-  
-  console.log('QQ音乐播放链接获取暂未实现，使用测试音频');
-  
   throw new Error('QQ音乐播放链接获取暂未实现');
 }
 
-// 网易云音乐获取播放链接
+// 网易云音乐获取播放链接（暂未实现）
 async function getNeteasePlayUrl(id, quality) {
-  // 网易云音乐的API需要加密参数
-  // 这里使用一个简化版，直接返回测试音频
-  // 实际应用中需要调用网易云的API
-  
-  console.log('网易云音乐播放链接获取暂未实现，使用测试音频');
-  
   throw new Error('网易云音乐播放链接获取暂未实现');
 }
